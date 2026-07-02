@@ -17,6 +17,8 @@ supports **tool calling** so the model can fetch live data on your behalf.
   | **search_wikipedia** | Wikipedia article summary in English or German |
   | **list_db2_tables** | Lists tables in an IBM Db2 schema (optional — see below) |
   | **query_db2** | Runs a read-only `SELECT`/`WITH` query against IBM Db2 (optional) |
+  | **get_nearby_cities** | Returns the closest cities to a given city using vector distance + haversine (optional) |
+  | **run_query_city_distance** | Calculates the haversine distance in km between two cities stored in Db2 (optional) |
 
 ---
 
@@ -113,13 +115,17 @@ Fetches current conditions from [wttr.in](https://wttr.in).
 Returns a 5-sentence summary from Wikipedia. Supports `language: "en"` (default) or `"de"`.  
 *Example prompt*: "Give me a Wikipedia summary of the Eiffel Tower in German."
 
-### Db2 — `list_db2_tables` and `query_db2`
+### Db2 — `list_db2_tables`, `query_db2`, `get_nearby_cities`, and `run_query_city_distance`
 Requires a configured Db2 connection (see `.env` above).
 - **list_db2_tables**: lists user tables for a schema (defaults to `DB2_SCHEMA` if set).
 - **query_db2**: runs a read-only `SELECT` or `WITH` statement; results are capped at 100 rows.
+- **get_nearby_cities**: finds the *N* closest cities to a given city. Uses Db2's `vector_distance` function (with Euclidean distance on a stored coordinate vector) to short-list candidates and the `haversine` UDF to calculate exact distances in km. Returns the city name, country, and distance for each result.
+  *Example prompt*: "What cities are near Paris?"
+- **run_query_city_distance**: calculates the straight-line (haversine) distance in km between two named cities stored in the `cities` table. Returns both city names and the distance.
+  *Example prompt*: "How far is Berlin from Madrid?"
 
 > The app starts and runs normally without Db2 credentials. Only requests that trigger these
-> two tools will return an error message in the chat.
+> tools will return an error message in the chat.
 
 ---
 
