@@ -1,0 +1,5 @@
+flask
+ollama
+requests
+ibm_db
+python-dotenv

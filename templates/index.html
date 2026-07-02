@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeDUG chat</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    /* ── Reset & base ────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sidebar-w:   260px;
+      --activity-w:  280px;
+      --accent:      #3b82d4;
+      --bg:          #ffffff;
+      --surface:     #f7f8fa;
+      --border:      #e5e7eb;
+      --text:        #1f2328;
+      --muted:       #57606a;
+      --user-bg:     #3b82d4;
+      --user-text:   #ffffff;
+      --radius:      10px;
+      --font:        -apple-system, "Segoe UI", system-ui, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    /* ── Layout ──────────────────────────────────────────────── */
+    #app {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Conversation sidebar ────────────────────────────────── */
+    #sidebar {
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidebar-header {
+      padding: 16px 14px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #sidebar-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.3px;
+      margin-bottom: 10px;
+    }
+
+    #new-chat-btn {
+      width: 100%;
+      padding: 7px 12px;
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    #new-chat-btn:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    #conv-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    .conv-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: background 0.1s;
+    }
+    .conv-item:hover { background: #edf0f4; }
+    .conv-item.active {
+      background: #e1eaf7;
+      border-left-color: var(--accent);
+    }
+
+    .conv-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .conv-preview {
+      font-size: 13px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .conv-time {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .conv-delete {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 15px;
+      line-height: 1;
+      padding: 2px 4px;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+    .conv-item:hover .conv-delete { opacity: 1; }
+    .conv-delete:hover { color: #c0392b; }
+
+    #sidebar-footer {
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+    }
+    #sidebar-footer label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    #model-select {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    #model-select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    /* ── Main chat area ──────────────────────────────────────── */
+    #chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* empty state */
+    #empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      pointer-events: none;
+      user-select: none;
+    }
+    #empty-state h2 { font-size: 22px; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+    #empty-state p  { font-size: 14px; }
+
+    /* bubbles */
+    .msg-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+    }
+    .msg-row.user      { justify-content: flex-end; }
+    .msg-row.assistant { justify-content: flex-start; }
+    .msg-row.tool      { justify-content: flex-start; }
+
+    .bubble {
+      max-width: 72%;
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      line-height: 1.65;
+      word-break: break-word;
+    }
+
+    .msg-row.user .bubble {
+      background: var(--user-bg);
+      color: var(--user-text);
+      border-bottom-right-radius: 3px;
+    }
+
+    .msg-row.assistant .bubble {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 3px;
+    }
+
+    .msg-row.tool .bubble {
+      background: #fff8e1;
+      border: 1px solid #ffe082;
+      color: #6d5300;
+      font-size: 12px;
+      font-family: monospace;
+      border-radius: 6px;
+      max-width: 80%;
+    }
+
+    /* thinking indicator */
+    .thinking-bubble {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 3px;
+      color: var(--muted);
+      font-style: italic;
+    }
+    .thinking-bubble::after {
+      content: "▋";
+      display: inline-block;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    /* Markdown reset inside bubbles */
+    .bubble h1, .bubble h2, .bubble h3 { margin: 0.5em 0 0.25em; font-size: 1em; font-weight: 700; }
+    .bubble p  { margin: 0 0 0.5em; }
+    .bubble p:last-child { margin-bottom: 0; }
+    .bubble ul, .bubble ol { padding-left: 1.4em; margin: 0.25em 0; }
+    .bubble code {
+      background: rgba(0,0,0,0.07);
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 13px;
+      font-family: "SFMono-Regular", "Consolas", monospace;
+    }
+    .msg-row.user .bubble code { background: rgba(255,255,255,0.25); }
+    .bubble pre {
+      background: rgba(0,0,0,0.06);
+      border-radius: 6px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      margin: 0.4em 0;
+    }
+    .bubble pre code { background: none; padding: 0; }
+    .bubble a { color: var(--accent); }
+    .msg-row.user .bubble a { color: #cce0ff; }
+    .bubble blockquote {
+      border-left: 3px solid var(--border);
+      margin: 0.4em 0;
+      padding-left: 10px;
+      color: var(--muted);
+    }
+    .bubble table { border-collapse: collapse; font-size: 13px; margin: 0.4em 0; }
+    .bubble th, .bubble td { border: 1px solid var(--border); padding: 4px 8px; }
+    .bubble th { background: var(--surface); }
+
+    /* ── Input area ──────────────────────────────────────────── */
+    #input-area {
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+      padding: 12px 20px 16px;
+    }
+
+    #input-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    #user-input {
+      flex: 1;
+      padding: 9px 13px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.5;
+      resize: none;
+      max-height: 180px;
+      overflow-y: auto;
+      color: var(--text);
+      background: var(--bg);
+      transition: border-color 0.15s;
+    }
+    #user-input:focus { outline: none; border-color: var(--accent); }
+    #user-input::placeholder { color: var(--muted); }
+
+    #send-btn {
+      flex-shrink: 0;
+      padding: 9px 18px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      height: 38px;
+    }
+    #send-btn:hover:not(:disabled) { opacity: 0.88; }
+    #send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Activity panel ──────────────────────────────────────── */
+    #activity-panel {
+      width: var(--activity-w);
+      min-width: var(--activity-w);
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: width 0.2s, min-width 0.2s;
+    }
+    #activity-panel.collapsed {
+      width: 32px;
+      min-width: 32px;
+    }
+
+    #activity-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 10px 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #activity-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 15px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    #activity-toggle:hover { color: var(--text); background: var(--border); }
+    #activity-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    #activity-panel.collapsed #activity-title { display: none; }
+
+    #activity-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 10px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    #activity-panel.collapsed #activity-body { display: none; }
+
+    /* turn separator in activity panel */
+    .act-separator {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      margin: 6px 0 4px;
+      padding-top: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .act-separator:first-child { border-top: none; margin-top: 0; }
+
+    /* individual activity entries */
+    .act-entry {
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 12px;
+      line-height: 1.5;
+      border: 1px solid transparent;
+    }
+
+    .act-entry.state {
+      background: #eef4ff;
+      border-color: #c5d9f7;
+      color: #1a4b8a;
+    }
+    .act-entry.state.error {
+      background: #fff0f0;
+      border-color: #ffc5c5;
+      color: #8a1a1a;
+    }
+
+    .act-entry.tool-call {
+      background: #fff8e1;
+      border-color: #ffe082;
+      color: #6d5300;
+    }
+    .act-entry.tool-call .act-tool-name {
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .act-entry.tool-call .act-args {
+      margin-top: 3px;
+      font-family: "SFMono-Regular", "Consolas", monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #5a4400;
+    }
+    .act-entry.tool-done {
+      background: #f0fff4;
+      border-color: #b2dfcc;
+      color: #145228;
+      font-size: 11px;
+    }
+
+    .act-entry.model-info {
+      background: var(--bg);
+      border-color: var(--border);
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .act-entry.model-info strong { color: var(--text); }
+
+    #activity-empty {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    /* spinner for active states */
+    .act-spinner {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 5px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Mobile ──────────────────────────────────────────────── */
+    @media (max-width: 700px) {
+      #sidebar { display: none; }
+      #activity-panel { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Conversation sidebar ───────────────────────────────── -->
+  <nav id="sidebar">
+    <div id="sidebar-header">
+      <div id="sidebar-title">DeDUG Chat</div>
+      <button id="new-chat-btn">+ New Chat</button>
+    </div>
+
+    <div id="conv-list">
+      <!-- conversation items injected here -->
+    </div>
+
+    <div id="sidebar-footer">
+      <label for="model-select">Model</label>
+      <select id="model-select">
+        <option value="" disabled selected>Loading…</option>
+      </select>
+    </div>
+  </nav>
+
+  <!-- ── Main chat area ──────────────────────────────────────── -->
+  <main id="chat-area">
+    <div id="messages">
+      <div id="empty-state">
+        <h2>Ask and understand :)</h2>
+        <p>Start a new conversation below.</p>
+      </div>
+    </div>
+
+    <div id="input-area">
+      <div id="input-row">
+        <textarea
+          id="user-input"
+          rows="1"
+          placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
+        ></textarea>
+        <button id="send-btn">Send</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── Activity panel ─────────────────────────────────────── -->
+  <aside id="activity-panel">
+    <div id="activity-header">
+      <button id="activity-toggle" title="Toggle activity panel">&#x25B6;</button>
+      <span id="activity-title">Activity</span>
+    </div>
+    <div id="activity-body">
+      <div id="activity-empty">No activity yet.</div>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+/* ── Helpers ──────────────────────────────────────────────────── */
+
+function generateUUID() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  );
+}
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function formatTimestamp(iso) {
+  if (!iso) return '';
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+  const now = new Date();
+  const diffMs = now - d;
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } else if (diffDays === 1) {
+    return 'Yesterday';
+  } else if (diffDays < 7) {
+    return d.toLocaleDateString([], { weekday: 'short' });
+  }
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function scrollToBottom() {
+  const messages = document.getElementById('messages');
+  messages.scrollTop = messages.scrollHeight;
+}
+
+/* ── State ────────────────────────────────────────────────────── */
+
+let currentConvId = generateUUID();
+let isStreaming   = false;
+
+/* ── DOM refs ─────────────────────────────────────────────────── */
+
+const convList      = document.getElementById('conv-list');
+const modelSelect   = document.getElementById('model-select');
+const messagesEl    = document.getElementById('messages');
+const emptyState    = document.getElementById('empty-state');
+const userInput     = document.getElementById('user-input');
+const sendBtn       = document.getElementById('send-btn');
+const newChatBtn    = document.getElementById('new-chat-btn');
+const activityPanel = document.getElementById('activity-panel');
+const activityBody  = document.getElementById('activity-body');
+const activityEmpty = document.getElementById('activity-empty');
+const activityToggle = document.getElementById('activity-toggle');
+
+/* ── Activity panel ───────────────────────────────────────────── */
+
+let activityCollapsed = false;
+
+activityToggle.addEventListener('click', () => {
+  activityCollapsed = !activityCollapsed;
+  activityPanel.classList.toggle('collapsed', activityCollapsed);
+  activityToggle.innerHTML = activityCollapsed ? '&#x25C0;' : '&#x25B6;';
+});
+
+let currentTurnGroup = null;
+
+function addActivityEntry(el) {
+  activityEmpty.style.display = 'none';
+  currentTurnGroup.appendChild(el);
+  activityBody.scrollTop = activityBody.scrollHeight;
+}
+
+/** Remove all remaining spinners in the current turn once the request is fully done. */
+function finaliseActivity() {
+  if (currentTurnGroup) {
+    currentTurnGroup.querySelectorAll('.act-spinner').forEach(s => s.remove());
+  }
+}
+
+/** Parse and render a [STATUS] payload into the activity panel. */
+function handleStatus(payload) {
+  // payload is everything after "[STATUS] "
+  if (payload.startsWith('model:')) {
+    const modelName = payload.slice(6);
+    const el = document.createElement('div');
+    el.className = 'act-entry model-info';
+    el.innerHTML = 'Using model: <strong>' + escapeHtml(modelName) + '</strong>';
+    addActivityEntry(el);
+
+  } else if (payload.startsWith('state:')) {
+    const state = payload.slice(6);
+    const el = document.createElement('div');
+    el.className = 'act-entry state' + (state === 'error' ? ' error' : '');
+    const labels = {
+      thinking:   '<span class="act-spinner"></span>Thinking…',
+      generating: '<span class="act-spinner"></span>Generating response…',
+      error:      'An error occurred.',
+    };
+    el.innerHTML = labels[state] || escapeHtml(state);
+    // Keep a reference so we can mark it done when the next state arrives
+    el.dataset.state = state;
+    addActivityEntry(el);
+    // Remove the spinner from the previous state entry when a new one arrives (current turn only)
+    const prev = (currentTurnGroup || activityBody).querySelectorAll('.act-entry.state:not([data-state="' + state + '"])');
+    prev.forEach(p => {
+      const spinner = p.querySelector('.act-spinner');
+      if (spinner) spinner.remove();
+    });
+
+  } else if (payload.startsWith('tool:')) {
+    // tool:<name>:<json-args>
+    const rest = payload.slice(5);
+    const colonIdx = rest.indexOf(':');
+    const toolName = colonIdx >= 0 ? rest.slice(0, colonIdx) : rest;
+    const argsRaw  = colonIdx >= 0 ? rest.slice(colonIdx + 1) : '';
+    let argsFormatted = argsRaw;
+    try {
+      argsFormatted = JSON.stringify(JSON.parse(argsRaw), null, 2);
+    } catch (_) { /* keep raw */ }
+
+    const el = document.createElement('div');
+    el.className = 'act-entry tool-call';
+    el.id = 'act-tool-' + toolName;
+    el.innerHTML =
+      '<span class="act-spinner"></span>' +
+      '<span class="act-tool-name">Tool: ' + escapeHtml(toolName) + '</span>' +
+      (argsFormatted ? '<div class="act-args">' + escapeHtml(argsFormatted) + '</div>' : '');
+    addActivityEntry(el);
+
+  } else if (payload.startsWith('tool_done:')) {
+    const toolName = payload.slice(10);
+    // Remove spinner from the matching tool-call entry
+    const callEl = document.getElementById('act-tool-' + toolName);
+    if (callEl) {
+      const spinner = callEl.querySelector('.act-spinner');
+      if (spinner) spinner.remove();
+    }
+    const el = document.createElement('div');
+    el.className = 'act-entry tool-done';
+    el.textContent = 'Done: ' + toolName;
+    addActivityEntry(el);
+  }
+}
+
+/* ── Models ───────────────────────────────────────────────────── */
+
+async function loadModels() {
+  try {
+    const [modelsRes, cfgRes] = await Promise.all([
+      fetch('/api/models'),
+      fetch('/api/config'),
+    ]);
+    const models    = await modelsRes.json();
+    const cfg       = await cfgRes.json();
+    const defaultModel = cfg.default_model || '';
+
+    if (Array.isArray(models) && models.length > 0) {
+      modelSelect.innerHTML = '';
+      models.forEach((name, i) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        // Prefer the configured default; fall back to the first entry
+        if (name === defaultModel || (defaultModel === '' && i === 0)) {
+          opt.selected = true;
+        }
+        modelSelect.appendChild(opt);
+      });
+      // If the configured default wasn't found, ensure the first is selected
+      if (!modelSelect.value) modelSelect.selectedIndex = 0;
+    } else {
+      modelSelect.innerHTML = '<option value="" disabled>No models found</option>';
+    }
+  } catch {
+    modelSelect.innerHTML = '<option value="" disabled>Error loading models</option>';
+  }
+}
+
+/* ── Conversation list ────────────────────────────────────────── */
+
+async function loadConversations() {
+  try {
+    const res  = await fetch('/api/conversations');
+    const data = await res.json();
+    renderConvList(data);
+  } catch {
+    // Non-critical — sidebar just stays empty
+  }
+}
+
+function renderConvList(conversations) {
+  convList.innerHTML = '';
+  conversations.forEach(conv => {
+    convList.appendChild(buildConvItem(conv));
+  });
+  highlightActiveConv();
+}
+
+function buildConvItem(conv) {
+  const item = document.createElement('div');
+  item.className = 'conv-item';
+  item.dataset.convId = conv.conversation_id;
+
+  const info = document.createElement('div');
+  info.className = 'conv-info';
+
+  const preview = document.createElement('div');
+  preview.className = 'conv-preview';
+  preview.textContent = conv.preview || '(empty)';
+
+  const time = document.createElement('div');
+  time.className = 'conv-time';
+  time.textContent = formatTimestamp(conv.last_updated);
+
+  info.appendChild(preview);
+  info.appendChild(time);
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'conv-delete';
+  delBtn.title = 'Delete conversation';
+  delBtn.textContent = '✕';
+  delBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    deleteConversation(conv.conversation_id, item);
+  });
+
+  item.appendChild(info);
+  item.appendChild(delBtn);
+  item.addEventListener('click', () => selectConversation(conv.conversation_id));
+
+  return item;
+}
+
+function highlightActiveConv() {
+  document.querySelectorAll('.conv-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.convId === currentConvId);
+  });
+}
+
+/* ── Select conversation ──────────────────────────────────────── */
+
+async function selectConversation(convId) {
+  currentConvId = convId;
+  highlightActiveConv();
+  clearMessages();
+
+  try {
+    const res  = await fetch(`/api/history/${convId}`);
+    const msgs = await res.json();
+    msgs.forEach(msg => {
+      if (msg.role === 'tool') return;
+      const content = typeof msg.content === 'string'
+        ? msg.content
+        : JSON.stringify(msg.content, null, 2);
+      renderMessage(msg.role, content, msg.role === 'assistant');
+    });
+    if (msgs.filter(m => m.role !== 'tool').length > 0) {
+      hideEmptyState();
+    }
+  } catch {
+    // Leave chat area empty on error
+  }
+}
+
+/* ── Delete conversation ──────────────────────────────────────── */
+
+async function deleteConversation(convId, itemEl) {
+  try {
+    await fetch(`/api/conversations/${convId}`, { method: 'DELETE' });
+  } catch {
+    // Best effort
+  }
+  itemEl.remove();
+  if (convId === currentConvId) {
+    startNewConversation();
+  }
+}
+
+/* ── New conversation ─────────────────────────────────────────── */
+
+function startNewConversation() {
+  currentConvId = generateUUID();
+  clearMessages();
+  showEmptyState();
+  highlightActiveConv();
+  userInput.focus();
+}
+
+newChatBtn.addEventListener('click', startNewConversation);
+
+/* ── Message rendering ────────────────────────────────────────── */
+
+function hideEmptyState() { emptyState.style.display = 'none'; }
+function showEmptyState()  { emptyState.style.display = ''; }
+
+function clearMessages() {
+  while (messagesEl.firstChild) messagesEl.removeChild(messagesEl.firstChild);
+  messagesEl.appendChild(emptyState);
+  showEmptyState();
+}
+
+/**
+ * Create and append a message bubble.
+ * @param {string}  role     'user' | 'assistant' | 'tool'
+ * @param {string}  content  Text content
+ * @param {boolean} markdown Whether to render with marked.js
+ * @returns {HTMLElement} The bubble element
+ */
+function renderMessage(role, content, markdown) {
+  hideEmptyState();
+
+  const row    = document.createElement('div');
+  row.className = `msg-row ${role}`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+
+  if (content) {
+    if (markdown) {
+      bubble.innerHTML = marked.parse(content);
+    } else {
+      bubble.textContent = content;
+    }
+  }
+
+  row.appendChild(bubble);
+  messagesEl.appendChild(row);
+  scrollToBottom();
+  return bubble;
+}
+
+function addThinkingBubble() {
+  hideEmptyState();
+  const row    = document.createElement('div');
+  row.className = 'msg-row assistant';
+  row.id = '__thinking__';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble thinking-bubble';
+  bubble.textContent = '⏳ thinking…\u00a0';
+  row.appendChild(bubble);
+  messagesEl.appendChild(row);
+  scrollToBottom();
+  return row;
+}
+
+function removeThinkingBubble() {
+  const el = document.getElementById('__thinking__');
+  if (el) el.remove();
+}
+
+/* ── Auto-grow textarea ───────────────────────────────────────── */
+
+userInput.addEventListener('input', () => {
+  userInput.style.height = 'auto';
+  userInput.style.height = Math.min(userInput.scrollHeight, 180) + 'px';
+});
+
+/* ── Send message ─────────────────────────────────────────────── */
+
+async function sendMessage() {
+  const text = userInput.value.trim();
+  if (!text || isStreaming) return;
+
+  const model = modelSelect.value;
+  if (!model) {
+    alert('Please wait for models to load, or select a model.');
+    return;
+  }
+
+  userInput.value = '';
+  userInput.style.height = 'auto';
+
+  renderMessage('user', text, false);
+
+  isStreaming = true;
+  sendBtn.disabled = true;
+  userInput.disabled = true;
+
+  // Start a new activity group for this turn (preserving earlier turns)
+  activityEmpty.style.display = 'none';
+  const sep = document.createElement('div');
+  sep.className = 'act-separator';
+  sep.textContent = text.length > 40 ? text.slice(0, 40) + '…' : text;
+  activityBody.appendChild(sep);
+  currentTurnGroup = document.createElement('div');
+  activityBody.appendChild(currentTurnGroup);
+  activityBody.scrollTop = activityBody.scrollHeight;
+
+  addThinkingBubble();
+
+  let assistantBubble = null;
+  let fullText        = '';
+  let firstChunk      = true;
+
+  try {
+    const response = await fetch('/api/chat', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        conversation_id: currentConvId,
+        model:           model,
+        message:         text,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer     = '';
+    let   streamDone = false;
+
+    while (!streamDone) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE events are separated by '\n\n'
+      const events = buffer.split('\n\n');
+      buffer = events.pop(); // last element may be incomplete
+
+      for (const event of events) {
+        // Collect ALL "data: " lines and rejoin with \n — a multi-line SSE payload
+        // is encoded as multiple "data: <line>" fields separated by single \n.
+        const dataLines = event.split('\n').filter(l => l.startsWith('data: '));
+        if (!dataLines.length) continue; // SSE comment (": keepalive") or blank — skip
+
+        const chunk = dataLines.map(l => l.slice(6)).join('\n');
+
+        // ── Status events ─────────────────────────────────────────────────
+        if (chunk.startsWith('[STATUS] ')) {
+          handleStatus(chunk.slice(9));
+          continue;
+        }
+
+        // ── Terminal sentinel ──────────────────────────────────────────────
+        if (chunk === '[DONE]') {
+          if (assistantBubble && fullText) {
+            assistantBubble.innerHTML = marked.parse(fullText);
+            assistantBubble.classList.remove('thinking-bubble');
+            scrollToBottom();
+          }
+          removeThinkingBubble();
+          finaliseActivity();
+          await loadConversations();
+          streamDone = true;
+          break;
+        }
+
+        // ── Text chunk ────────────────────────────────────────────────────
+        if (firstChunk) {
+          removeThinkingBubble();
+          assistantBubble = renderMessage('assistant', '', false);
+          firstChunk = false;
+        }
+
+        fullText += chunk;
+        if (assistantBubble) {
+          // Render completed lines as markdown; append the current in-progress
+          // line as plain text so partial tokens never confuse the parser.
+          const lastNl = fullText.lastIndexOf('\n');
+          if (lastNl === -1) {
+            // No newline yet — nothing is a complete block; show plain text.
+            assistantBubble.textContent = fullText;
+          } else {
+            const completedLines = fullText.slice(0, lastNl + 1);
+            const pendingLine    = fullText.slice(lastNl + 1);
+            assistantBubble.innerHTML =
+              marked.parse(completedLines) +
+              (pendingLine ? '<span>' + escapeHtml(pendingLine) + '</span>' : '');
+          }
+          scrollToBottom();
+        }
+      }
+    }
+
+    // Edge case: stream ended without [DONE]
+    if (!streamDone) {
+      if (assistantBubble && fullText) {
+        assistantBubble.innerHTML = marked.parse(fullText);
+        assistantBubble.classList.remove('thinking-bubble');
+      }
+      removeThinkingBubble();
+      finaliseActivity();
+    }
+
+  } catch (err) {
+    removeThinkingBubble();
+    finaliseActivity();
+    renderMessage('assistant', `⚠️ Error: ${err.message}`, false);
+    const el = document.createElement('div');
+    el.className = 'act-entry state error';
+    el.textContent = 'Error: ' + err.message;
+    addActivityEntry(el);
+  } finally {
+    isStreaming        = false;
+    sendBtn.disabled   = false;
+    userInput.disabled = false;
+    userInput.focus();
+    scrollToBottom();
+  }
+}
+
+/* ── Keyboard shortcut ────────────────────────────────────────── */
+
+userInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+sendBtn.addEventListener('click', sendMessage);
+
+/* ── Init ─────────────────────────────────────────────────────── */
+
+(async () => {
+  await Promise.all([loadModels(), loadConversations()]);
+  userInput.focus();
+})();
+</script>
+</body>
+</html>
