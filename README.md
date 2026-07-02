@@ -20,6 +20,8 @@ supports **tool calling** so the model can fetch live data on your behalf.
   | **get_nearby_cities** | Returns the closest cities to a given city using vector distance + haversine (optional) |
   | **run_query_city_distance** | Calculates the haversine distance in km between two cities stored in Db2 (optional) |
 
+See my [blog post on using Db2 vector capabilities for geographic search](https://data-henrik.de/2025/11/db2-vector-geo-search/) for details, including the database setup.
+
 ---
 
 ## Prerequisites
