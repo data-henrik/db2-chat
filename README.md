@@ -4,7 +4,7 @@
 It connects to a locally-running [Ollama](https://ollama.com/) instance for LLM inference and
 supports **tool calling** so the model can fetch live data on your behalf.
 
-![Chat with your local Db2](202607_Db2_chat_geo.png)
+![Chat with your local Db2](202607_Db2_DeDUG_chat.png)
 
 ## Features
 
