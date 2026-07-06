@@ -1,6 +1,6 @@
-# ochat
+# Db2 chat
 
-**ochat** is a browser-based chat application that runs entirely on your machine.
+**Db2 chat** (or DeDUG chati (German Db2 User Group), or ochat (ollama chat)) is a browser-based chat application that runs entirely on your machine.
 It connects to a locally-running [Ollama](https://ollama.com/) instance for LLM inference and
 supports **tool calling** so the model can fetch live data on your behalf.
 
